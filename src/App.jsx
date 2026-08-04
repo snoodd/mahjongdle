@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { Share2, Check, HelpCircle, X, Flame } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Share2, Check, HelpCircle, X, ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 
 /* ---------------------------------------------------------
    Tile helpers — rendered with real Unicode Mahjong glyphs
@@ -381,16 +381,17 @@ function scoreHand(tiles) {
   return { valid: true, faan, breakdown, label };
 }
 
-
 /* ---------------------------------------------------------
    Date / puzzle number helpers
 --------------------------------------------------------- */
-function todayStr() {
-  const d = new Date();
+function formatDate(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+function todayStr() {
+  return formatDate(new Date());
 }
 function puzzleNumber(dateStr) {
   const d = new Date(dateStr + "T00:00:00");
@@ -399,11 +400,14 @@ function puzzleNumber(dateStr) {
 function yesterdayStr(dateStr) {
   const d = new Date(dateStr + "T00:00:00");
   d.setDate(d.getDate() - 1);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return formatDate(d);
 }
+function addDays(dateStr, delta) {
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + delta);
+  return formatDate(d);
+}
+const EPOCH_STR = formatDate(EPOCH);
 
 /* ---------------------------------------------------------
    Tile component
@@ -508,8 +512,8 @@ function ExampleRow({ tiles, valid, label }) {
 --------------------------------------------------------- */
 export default function MahjongSolitaire() {
   const isMobile = useIsMobile();
-  const [dateStr] = useState(todayStr());
-  const [game] = useState(() => buildGame(dateStr));
+  const [dateStr, setDateStr] = useState(todayStr());
+  const game = useMemo(() => buildGame(dateStr), [dateStr]);
   const [hand, setHand] = useState(game.hand);
   const [turnIndex, setTurnIndex] = useState(0);
   const [drawnTile, setDrawnTile] = useState(null);
@@ -525,10 +529,29 @@ export default function MahjongSolitaire() {
   const [showRules, setShowRules] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareText, setShareText] = useState("");
+  const [showArchive, setShowArchive] = useState(false);
 
   const pNum = puzzleNumber(dateStr);
+  const todayString = todayStr();
+  const isViewingToday = dateStr === todayString;
+
+  function goToDate(newDateStr) {
+    if (newDateStr > todayString || newDateStr < EPOCH_STR) return;
+    setDateStr(newDateStr);
+    setShowArchive(false);
+  }
 
   useEffect(() => {
+    setLoading(true);
+    setHand(game.hand);
+    setTurnIndex(0);
+    setDrawnTile(null);
+    setGameOver(false);
+    setResult(null);
+    setFinalHand(null);
+    setOfficialResult(null);
+    setOfficialFinalHand(null);
+    setIsPractice(false);
     (async () => {
       try {
         const saved = await window.storage.get(`progress:${dateStr}`);
@@ -543,7 +566,7 @@ export default function MahjongSolitaire() {
           }
         }
       } catch (e) {
-        /* no saved progress yet */
+        /* no saved progress yet for this date */
       }
       try {
         const s = await window.storage.get("streak");
@@ -580,14 +603,16 @@ export default function MahjongSolitaire() {
           `progress:${dateStr}`,
           JSON.stringify({ completed: true, result: scored, finalHand: hand14 })
         );
-        const s = await window.storage.get("streak").catch(() => null);
-        let count = 1;
-        if (s && s.value) {
-          const parsed = JSON.parse(s.value);
-          count = parsed.lastDate === yesterdayStr(dateStr) ? (parsed.count || 1) + 1 : 1;
+        if (dateStr === todayStr()) {
+          const s = await window.storage.get("streak").catch(() => null);
+          let count = 1;
+          if (s && s.value) {
+            const parsed = JSON.parse(s.value);
+            count = parsed.lastDate === yesterdayStr(dateStr) ? (parsed.count || 1) + 1 : 1;
+          }
+          await window.storage.set("streak", JSON.stringify({ count, lastDate: dateStr }));
+          setStreak(count);
         }
-        await window.storage.set("streak", JSON.stringify({ count, lastDate: dateStr }));
-        setStreak(count);
       } catch (e) {
         /* storage unavailable, game still playable this session */
       }
@@ -724,15 +749,68 @@ export default function MahjongSolitaire() {
           >
             Mahjong Solitaire
           </h1>
-          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.8rem", color: "#9FBBA8", marginTop: 2 }}>
-            Puzzle #{pNum} &middot; {dateStr}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+            <button
+              onClick={() => goToDate(addDays(dateStr, -1))}
+              disabled={dateStr <= EPOCH_STR}
+              style={{
+                background: "none",
+                border: "none",
+                color: dateStr <= EPOCH_STR ? "#4A5C51" : "#9FBBA8",
+                cursor: dateStr <= EPOCH_STR ? "default" : "pointer",
+                padding: 0,
+                display: "flex",
+              }}
+              aria-label="Previous puzzle"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.8rem", color: "#9FBBA8" }}>
+              Puzzle #{pNum} &middot; {dateStr}
+            </div>
+            <button
+              onClick={() => goToDate(addDays(dateStr, 1))}
+              disabled={isViewingToday}
+              style={{
+                background: "none",
+                border: "none",
+                color: isViewingToday ? "#4A5C51" : "#9FBBA8",
+                cursor: isViewingToday ? "default" : "pointer",
+                padding: 0,
+                display: "flex",
+              }}
+              aria-label="Next puzzle"
+            >
+              <ChevronRight size={16} />
+            </button>
+            {!isViewingToday && (
+              <button
+                onClick={() => goToDate(todayString)}
+                style={{
+                  background: "rgba(201,162,75,0.15)",
+                  border: "1px solid rgba(201,162,75,0.4)",
+                  color: "#C9A24B",
+                  fontFamily: "'IBM Plex Mono', monospace",
+                  fontSize: "0.7rem",
+                  padding: "2px 8px",
+                  borderRadius: 20,
+                  cursor: "pointer",
+                  marginLeft: 4,
+                }}
+              >
+                Today
+              </button>
+            )}
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#C9A24B", fontFamily: "'IBM Plex Mono', monospace", fontSize: "0.85rem" }}>
-            <Flame size={16} />
-            {streak}
-          </div>
+          <button
+            onClick={() => setShowArchive(true)}
+            style={{ background: "none", border: "none", color: "#9FBBA8", cursor: "pointer" }}
+            aria-label="Browse past puzzles"
+          >
+            <CalendarDays size={20} />
+          </button>
           <button
             onClick={() => setShowRules(true)}
             style={{ background: "none", border: "none", color: "#9FBBA8", cursor: "pointer" }}
@@ -744,7 +822,7 @@ export default function MahjongSolitaire() {
       </div>
 
       {loading ? (
-        <div style={{ marginTop: 80, color: "#9FBBA8" }}>Shuffling today's wall…</div>
+        <div style={{ marginTop: 80, color: "#9FBBA8" }}>Shuffling the wall…</div>
       ) : gameOver ? (
         /* ---------------- RESULT SCREEN ---------------- */
         <div style={{ width: "100%", maxWidth: 1100, marginTop: 32 }}>
@@ -856,7 +934,9 @@ export default function MahjongSolitaire() {
             <div style={{ marginTop: 16, fontSize: "0.8rem", color: "#9FBBA8" }}>
               {isPractice
                 ? "This replay doesn't affect your saved score or streak."
-                : "New puzzle tomorrow. Come back and keep the streak going."}
+                : isViewingToday
+                ? "New puzzle tomorrow. Come back and keep the streak going."
+                : "This is an archived puzzle — your streak is based on today's puzzle only."}
             </div>
           </div>
         </div>
@@ -964,6 +1044,97 @@ export default function MahjongSolitaire() {
             })}
           </div>
 
+        </div>
+      )}
+
+      {/* archive modal */}
+      {showArchive && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+            zIndex: 50,
+          }}
+          onClick={() => setShowArchive(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "#1E4437",
+              border: "1px solid rgba(240,230,207,0.2)",
+              borderRadius: 16,
+              padding: 24,
+              maxWidth: 340,
+              width: "100%",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontFamily: "'Zilla Slab', serif", fontWeight: 700, fontSize: "1.2rem" }}>Past puzzles</div>
+              <button onClick={() => setShowArchive(false)} style={{ background: "none", border: "none", color: "#9FBBA8", cursor: "pointer" }}>
+                <X size={20} />
+              </button>
+            </div>
+            <p style={{ fontSize: "0.85rem", color: "#D8CBA8", marginBottom: 14 }}>
+              Pick any date to replay that day's puzzle. Completing an old puzzle saves its own score, but only
+              today's puzzle affects your streak.
+            </p>
+            <input
+              type="date"
+              value={dateStr}
+              min={EPOCH_STR}
+              max={todayString}
+              onChange={(e) => e.target.value && goToDate(e.target.value)}
+              style={{
+                width: "100%",
+                boxSizing: "border-box",
+                background: "#16302A",
+                border: "1px solid rgba(240,230,207,0.2)",
+                borderRadius: 8,
+                color: "#F0E6CF",
+                fontFamily: "'IBM Plex Mono', monospace",
+                fontSize: "0.9rem",
+                padding: "8px 10px",
+                marginBottom: 14,
+              }}
+            />
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button
+                onClick={() => goToDate(todayString)}
+                style={{
+                  background: "#4F7942",
+                  border: "none",
+                  color: "#F0E6CF",
+                  padding: "8px 16px",
+                  borderRadius: 8,
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Today
+              </button>
+              <button
+                onClick={() => goToDate(yesterdayStr(todayString))}
+                style={{
+                  background: "transparent",
+                  border: "1px solid rgba(240,230,207,0.4)",
+                  color: "#F0E6CF",
+                  padding: "8px 16px",
+                  borderRadius: 8,
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                Yesterday
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
