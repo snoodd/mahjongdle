@@ -1296,25 +1296,23 @@ export default function MahjongSolitaire() {
               A valid hand is scored in faan (multiple patterns can stack if a hand qualifies for more than one):
             </p>
             <ul style={{ fontSize: "0.85rem", lineHeight: 1.7, color: "#D8CBA8", paddingLeft: 18 }}>
-              <li>All Triplets (every set a triplet): 3 faan</li>
-              <li>All Chows (every set a run): 1 faan</li>
-              <li>Mixed One Suit (one suit plus honors): 3 faan</li>
+              <li>All Triplets (every set a triplet, any pair): 3 faan</li>
+              <li>All Sequences (every set a run, any pair): 1 faan</li>
+              <li>Semi Flush (a hand comprised of only one suit plus honors): 3 faan</li>
               <li>Small Three Dragons (two dragon triplets plus a pair of the third): 3 faan</li>
-              <li>Full Flush (one suit only): 6 faan</li>
-              <li>Big Three Dragons (all three dragon triplets): 6 faan</li>
+              <li>Seven Pairs: 4 faan</li>
+              <li>Full Flush (a hand comprised of one suit only): 6 faan</li>
+              <li>Big Three Dragons (all three dragon triplets, any pair): 6 faan</li>
               <li>Small Four Winds (three wind triplets plus a pair of the fourth): 5 faan</li>
               <li>Big Four Winds (all four wind triplets): 8 faan</li>
               <li>All Honors (winds/dragons only): 10 faan</li>
               <li>All Terminals (only 1s and 9s): 10 faan</li>
               <li>All Green: 10 faan</li>
-              <li>Seven Pairs: 4 faan</li>
               <li>Thirteen Orphans: 10 faan</li>
               <li>Nine Gates: 10 faan</li>
               <li>Heavenly Hand (declared on your very first draw): +10 faan</li>
               <li>Dragon Pung (each): 1 faan</li>
-              <li>All Simples (no 1s, 9s, or honors): 1 faan</li>
-              <li>Any other valid hand: 1 faan</li>
-            </ul>
+              </ul>
             <p style={{ fontSize: "0.8rem", lineHeight: 1.5, color: "#9FBBA8", marginTop: 8 }}>
               (Flower and season tiles aren't part of this game, so there's no bonus for collecting them.)
             </p>
