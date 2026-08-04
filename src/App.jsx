@@ -1214,18 +1214,6 @@ export default function MahjongSolitaire() {
                 <Tile key={i} tile={{ suit: "d", value: v }} small />
               ))}
             </div>
-
-            <p style={{ fontSize: "0.85rem", lineHeight: 1.5, color: "#D8CBA8", marginBottom: 8 }}>
-              <strong style={{ color: "#F0E6CF" }}>Small / Big Three Dragons</strong> and{" "}
-              <strong style={{ color: "#F0E6CF" }}>Small / Big Four Winds</strong> — build triplets of two, three,
-              or all of the dragons or winds. Getting the pair to match the one you're missing (e.g. a pair of
-              White when you have Red and Green triplets) still counts as the "small" version.
-            </p>
-            <p style={{ fontSize: "0.85rem", lineHeight: 1.5, color: "#D8CBA8", marginBottom: 4 }}>
-              <strong style={{ color: "#F0E6CF" }}>Heavenly Hand</strong> — declare Mahjong on the very first tile
-              you draw. Real mahjong distinguishes a dealer's opening hand from a non-dealer's first draw; since
-              this is solitaire, both are treated the same way here.
-            </p>
           </div>
         </div>
       )}
