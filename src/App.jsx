@@ -1250,14 +1250,14 @@ export default function MahjongSolitaire() {
               </button>
             </div>
             <p style={{ fontSize: "0.9rem", lineHeight: 1.5, color: "#D8CBA8" }}>
-              You start with 13 tiles. Draw {DRAWS} tiles, one at a time, from today's shared wall — everyone
+              You start with 13 tiles. Draw {DRAWS} tiles, one at a time, from today's shared wall. Everyone
               gets the same tiles in the same order. After each draw (except the last), discard one tile to
-              stay at 13. Your final draw locks in automatically as your 14th tile — no more discards.
+              stay at 13. Your final draw locks in automatically as your 14th tile, with no more discards.
             </p>
             <p style={{ fontSize: "0.9rem", lineHeight: 1.5, color: "#D8CBA8" }}>
               At any point after a draw, you can tap <strong>Declare Mahjong</strong> to end the game with your
               current hand plus the tile you just drew. The game won't tell you in advance whether your hand
-              is valid — if it doesn't form four sets of three plus a pair (or seven pairs), you score zero.
+              is valid. If it doesn't form four sets of three plus a pair (or seven pairs), you score zero.
               If you never declare, your final draw is checked the same way.
             </p>
 
@@ -1266,54 +1266,54 @@ export default function MahjongSolitaire() {
             </div>
             <p style={{ fontSize: "0.85rem", lineHeight: 1.5, color: "#D8CBA8", marginBottom: 12 }}>
               A set of three must either be three <em>identical</em> tiles, or three tiles in a row within the
-              same suit. The suit has to match — same number in different suits doesn't count as either one.
+              same suit. The suit has to match. Same number in different suits doesn't count as either one.
             </p>
             <ExampleRow
               tiles={[{ suit: "d", value: 3 }, { suit: "d", value: 3 }, { suit: "d", value: 3 }]}
               valid
-              label="Triplet — three identical tiles"
+              label="Triplet: three identical tiles"
             />
             <ExampleRow
               tiles={[{ suit: "d", value: 3 }, { suit: "b", value: 3 }, { suit: "m", value: 3 }]}
               valid={false}
-              label="Not a triplet — same number, different suits"
+              label="Not a triplet: same number, different suits"
             />
             <ExampleRow
               tiles={[{ suit: "d", value: 3 }, { suit: "d", value: 4 }, { suit: "d", value: 5 }]}
               valid
-              label="Sequence — three in a row, same suit"
+              label="Sequence: three in a row, same suit"
             />
             <ExampleRow
               tiles={[{ suit: "d", value: 3 }, { suit: "b", value: 4 }, { suit: "m", value: 5 }]}
               valid={false}
-              label="Not a sequence — must all be the same suit"
+              label="Not a sequence: must all be the same suit"
             />
             <p style={{ fontSize: "0.85rem", lineHeight: 1.5, color: "#D8CBA8", marginTop: 4, marginBottom: 16 }}>
-              Winds and dragons can only form triplets (or the pair) — they never form sequences.
+              Winds and dragons can only form triplets or the pair. They never form sequences.
             </p>
 
             <p style={{ fontSize: "0.9rem", lineHeight: 1.5, color: "#D8CBA8" }}>
               A valid hand is scored in faan (multiple patterns can stack if a hand qualifies for more than one):
             </p>
             <ul style={{ fontSize: "0.85rem", lineHeight: 1.7, color: "#D8CBA8", paddingLeft: 18 }}>
-              <li>All Triplets (every set a triplet) — 3</li>
-              <li>All Chows (every set a run) — 1</li>
-              <li>Mixed One Suit (one suit + honors) — 3</li>
-              <li>Small Three Dragons (two dragon triplets + pair of the third) — 3</li>
-              <li>Full Flush (one suit only) — 6</li>
-              <li>Big Three Dragons (all three dragon triplets) — 6</li>
-              <li>Small Four Winds (three wind triplets + pair of the fourth) — 5</li>
-              <li>Big Four Winds (all four wind triplets) — 8</li>
-              <li>All Honors (winds/dragons only) — 10</li>
-              <li>All Terminals (only 1s and 9s) — 10</li>
-              <li>All Green — 10</li>
-              <li>Seven Pairs — 4</li>
-              <li>Thirteen Orphans — 10</li>
-              <li>Nine Gates — 10</li>
-              <li>Heavenly Hand (declared on your very first draw) — +10</li>
-              <li>Dragon Pung (each) — 1</li>
-              <li>All Simples (no 1s, 9s, or honors) — 1</li>
-              <li>Any other valid hand — 1</li>
+              <li>All Triplets (every set a triplet): 3 faan</li>
+              <li>All Chows (every set a run): 1 faan</li>
+              <li>Mixed One Suit (one suit plus honors): 3 faan</li>
+              <li>Small Three Dragons (two dragon triplets plus a pair of the third): 3 faan</li>
+              <li>Full Flush (one suit only): 6 faan</li>
+              <li>Big Three Dragons (all three dragon triplets): 6 faan</li>
+              <li>Small Four Winds (three wind triplets plus a pair of the fourth): 5 faan</li>
+              <li>Big Four Winds (all four wind triplets): 8 faan</li>
+              <li>All Honors (winds/dragons only): 10 faan</li>
+              <li>All Terminals (only 1s and 9s): 10 faan</li>
+              <li>All Green: 10 faan</li>
+              <li>Seven Pairs: 4 faan</li>
+              <li>Thirteen Orphans: 10 faan</li>
+              <li>Nine Gates: 10 faan</li>
+              <li>Heavenly Hand (declared on your very first draw): +10 faan</li>
+              <li>Dragon Pung (each): 1 faan</li>
+              <li>All Simples (no 1s, 9s, or honors): 1 faan</li>
+              <li>Any other valid hand: 1 faan</li>
             </ul>
             <p style={{ fontSize: "0.8rem", lineHeight: 1.5, color: "#9FBBA8", marginTop: 8 }}>
               (Flower and season tiles aren't part of this game, so there's no bonus for collecting them.)
@@ -1324,8 +1324,12 @@ export default function MahjongSolitaire() {
             </div>
 
             <p style={{ fontSize: "0.85rem", lineHeight: 1.5, color: "#D8CBA8", marginBottom: 8 }}>
-              <strong style={{ color: "#F0E6CF" }}>All Green</strong> — every tile must be the Green Dragon or a
-              Bamboo tile printed green: 2, 3, 4, 6, or 8. Bamboo 1, 5, 7, and 9 aren't green, so they break the hand.
+              <strong style={{ color: "#F0E6CF" }}>All Green</strong> requires every tile to be the Green Dragon
+              or one of the green Bamboo tiles: 2, 3, 4, 6, and 8. In this game we color the whole Bamboo suit
+              green for readability, so on screen the 1, 5, 7, and 9 Bamboo tiles look the same shade as the
+              rest. On real physical tiles, though, only 2, 3, 4, 6, and 8 of Bamboo are actually painted green.
+              The 1, 5, 7, and 9 tiles are printed in other colors, which is the traditional reason they break
+              the hand, even though our simplified coloring doesn't show that difference.
             </p>
             <ExampleRow
               tiles={[
@@ -1347,13 +1351,13 @@ export default function MahjongSolitaire() {
                 { suit: "b", value: 9 },
               ]}
               valid={false}
-              label="These Bamboo tiles aren't green — any of them breaks the hand"
+              label="Not painted green on real tiles, even though they look green here"
             />
 
             <p style={{ fontSize: "0.85rem", lineHeight: 1.5, color: "#D8CBA8", margin: "16px 0 8px" }}>
-              <strong style={{ color: "#F0E6CF" }}>Thirteen Orphans</strong> — collect one of every terminal
-              (the 1 and 9 of each suit), one of every wind, and one of every dragon: 13 unique tiles in total.
-              Your 14th tile just duplicates any one of them to form the pair.
+              <strong style={{ color: "#F0E6CF" }}>Thirteen Orphans</strong> means collecting one of every
+              terminal (the 1 and 9 of each suit), one of every wind, and one of every dragon, 13 unique tiles
+              in total. Your 14th tile just duplicates any one of them to form the pair.
             </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: 12 }}>
               {[
@@ -1376,9 +1380,9 @@ export default function MahjongSolitaire() {
             </div>
 
             <p style={{ fontSize: "0.85rem", lineHeight: 1.5, color: "#D8CBA8", margin: "0 0 8px" }}>
-              <strong style={{ color: "#F0E6CF" }}>Nine Gates</strong> — one suit only, shaped exactly like this:
-              three of the 1, one each of 2 through 8, three of the 9 — then any 14th tile from that same suit
-              completes it, no matter which one.
+              <strong style={{ color: "#F0E6CF" }}>Nine Gates</strong> uses one suit only, shaped exactly like
+              this: three of the 1, one each of 2 through 8, and three of the 9. Any 14th tile from that same
+              suit completes it, no matter which one.
             </p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: 12 }}>
               {[1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 9].map((v, i) => (
