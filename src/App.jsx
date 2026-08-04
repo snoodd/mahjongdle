@@ -11,6 +11,21 @@ const DRAGON_CODE = { red: 0x1f004, green: 0x1f005, white: 0x1f006 };
 const TILE_BACK = String.fromCodePoint(0x1f02b);
 const DRAWS = 36;
 const EPOCH = new Date("2026-01-01T00:00:00");
+const MOBILE_BREAKPOINT = 640;
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < MOBILE_BREAKPOINT
+  );
+  useEffect(() => {
+    function handleResize() {
+      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
+    }
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+  return isMobile;
+}
 
 function tileGlyph(t) {
   const VS_TEXT = "\uFE0E"; // force plain text glyph, not a native color emoji graphic
@@ -190,6 +205,51 @@ function findSevenPairs(tiles) {
   if (keys.length === 7 && keys.every((k) => counts[k] === 2)) return keys;
   return null;
 }
+
+const ORPHAN_KEYS = [
+  "m1", "m9", "b1", "b9", "d1", "d9",
+  "wind-E", "wind-S", "wind-W", "wind-N",
+  "dragon-red", "dragon-green", "dragon-white",
+];
+function findThirteenOrphans(tiles) {
+  if (tiles.length !== 14) return false;
+  const counts = buildCounts(tiles);
+  const keys = Object.keys(counts);
+  if (keys.some((k) => !ORPHAN_KEYS.includes(k))) return false;
+  return ORPHAN_KEYS.every((k) => (counts[k] || 0) >= 1);
+}
+
+const GREEN_BAMBOO_VALUES = [2, 3, 4, 6, 8];
+function isAllGreenTile(k) {
+  if (k === "dragon-green") return true;
+  if (k[0] === "b") return GREEN_BAMBOO_VALUES.includes(parseInt(k.slice(1), 10));
+  return false;
+}
+function isAllGreenHand(tiles) {
+  return tiles.every((t) => isAllGreenTile(tileKey(t)));
+}
+
+function findNineGates(tiles) {
+  if (tiles.length !== 14) return false;
+  const suit = tiles[0].suit;
+  if (suit !== "m" && suit !== "b" && suit !== "d") return false;
+  if (!tiles.every((t) => t.suit === suit)) return false;
+  const counts = new Array(10).fill(0); // index 1-9 used
+  tiles.forEach((t) => counts[t.value]++);
+  const base = [0, 3, 1, 1, 1, 1, 1, 1, 1, 3];
+  let extra = 0;
+  for (let v = 1; v <= 9; v++) {
+    const diff = counts[v] - base[v];
+    if (diff < 0) return false;
+    extra += diff;
+  }
+  return extra === 1;
+}
+
+function isAllTerminalsHand(tiles) {
+  return tiles.every((t) => (t.suit === "m" || t.suit === "b" || t.suit === "d") && (t.value === 1 || t.value === 9));
+}
+
 function capitalize(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
@@ -200,9 +260,21 @@ function pungIsSimple(k) {
 }
 
 function scoreHand(tiles) {
+  if (findThirteenOrphans(tiles)) {
+    return { valid: true, faan: 10, breakdown: ["Thirteen Orphans (+10)"], label: "Thirteen Orphans" };
+  }
+  if (findNineGates(tiles)) {
+    return { valid: true, faan: 10, breakdown: ["Nine Gates (+10)"], label: "Nine Gates" };
+  }
   const seven = findSevenPairs(tiles);
   if (seven) {
-    return { valid: true, faan: 4, breakdown: ["Seven Pairs (+4)"], label: "Seven Pairs" };
+    const breakdown = ["Seven Pairs (+4)"];
+    let faan = 4;
+    if (isAllGreenHand(tiles)) {
+      faan += 10;
+      breakdown.push("All Green (+10)");
+    }
+    return { valid: true, faan, breakdown, label: isAllGreenHand(tiles) ? "All Green" : "Seven Pairs" };
   }
   const std = findStandardHand(tiles);
   if (!std) return { valid: false, faan: 0, breakdown: [], label: "No Valid Hand" };
@@ -225,7 +297,7 @@ function scoreHand(tiles) {
 
   if (allPung) {
     faan += 3;
-    breakdown.push("All Pungs (+3)");
+    breakdown.push("All Triplets (+3)");
   }
   if (allChow && !isHonorKey(pair)) {
     faan += 1;
@@ -237,10 +309,20 @@ function scoreHand(tiles) {
     breakdown.push("Full Flush (+6)");
   } else if (suitsUsed.size === 1 && honorInvolved) {
     faan += 3;
-    breakdown.push("Half Flush (+3)");
+    breakdown.push("Mixed One Suit (+3)");
   } else if (suitsUsed.size === 0 && honorInvolved) {
-    faan += 8;
-    breakdown.push("All Honors (+8)");
+    faan += 10;
+    breakdown.push("All Honors (+10)");
+  }
+
+  if (isAllTerminalsHand(tiles)) {
+    faan += 10;
+    breakdown.push("All Terminals (+10)");
+  }
+
+  if (isAllGreenHand(tiles)) {
+    faan += 10;
+    breakdown.push("All Green (+10)");
   }
 
   const dragonPungs = melds.filter((m) => m.type === "pung" && m.key.startsWith("dragon-"));
@@ -248,6 +330,22 @@ function scoreHand(tiles) {
     faan += 1;
     breakdown.push(`Dragon Pung: ${capitalize(m.key.slice(7))} (+1)`);
   });
+  if (dragonPungs.length === 3) {
+    faan += 6;
+    breakdown.push("Big Three Dragons (+6)");
+  } else if (dragonPungs.length === 2 && pair.startsWith("dragon-")) {
+    faan += 3;
+    breakdown.push("Small Three Dragons (+3)");
+  }
+
+  const windPungs = melds.filter((m) => m.type === "pung" && m.key.startsWith("wind-"));
+  if (windPungs.length === 4) {
+    faan += 8;
+    breakdown.push("Big Four Winds (+8)");
+  } else if (windPungs.length === 3 && pair.startsWith("wind-")) {
+    faan += 5;
+    breakdown.push("Small Four Winds (+5)");
+  }
 
   const pairSimple = !isHonorKey(pair) && (() => {
     const v = parseInt(pair.slice(1), 10);
@@ -268,8 +366,21 @@ function scoreHand(tiles) {
     breakdown.push("Basic Winning Hand (+1)");
   }
 
-  return { valid: true, faan, breakdown, label: breakdown[0].split(" (")[0] };
+  const priority = [
+    "Big Four Winds", "Big Three Dragons", "All Terminals", "All Green",
+    "Small Four Winds", "Small Three Dragons", "Full Flush", "All Honors",
+    "All Triplets", "Mixed One Suit",
+  ];
+  let label = breakdown[0].split(" (")[0];
+  for (const p of priority) {
+    if (breakdown.some((b) => b.startsWith(p))) {
+      label = p;
+      break;
+    }
+  }
+  return { valid: true, faan, breakdown, label };
 }
+
 
 /* ---------------------------------------------------------
    Date / puzzle number helpers
@@ -319,7 +430,14 @@ function tileCornerLabel(tile) {
 }
 
 function Tile({ tile, faceDown, highlight, onClick, small }) {
-  const size = small ? { w: 52, h: 72, font: "2rem", label: "0.65rem" } : { w: 72, h: 100, font: "2.8rem", label: "0.8rem" };
+  const isMobile = useIsMobile();
+  const size = small
+    ? isMobile
+      ? { w: 42, h: 58, font: "2.1rem", label: "0.55rem" }
+      : { w: 52, h: 72, font: "2.6rem", label: "0.65rem" }
+    : isMobile
+    ? { w: 50, h: 70, font: "2.6rem", label: "0.6rem" }
+    : { w: 72, h: 100, font: "3.4rem", label: "0.8rem" };
   return (
     <button
       onClick={onClick}
@@ -369,10 +487,27 @@ function Tile({ tile, faceDown, highlight, onClick, small }) {
   );
 }
 
+function ExampleRow({ tiles, valid, label }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+      <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
+        {tiles.map((t, i) => (
+          <Tile key={i} tile={t} small />
+        ))}
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8rem", color: "#D8CBA8" }}>
+        {valid ? <Check size={16} color="#4F7942" style={{ flexShrink: 0 }} /> : <X size={16} color="#A63D31" style={{ flexShrink: 0 }} />}
+        <span>{label}</span>
+      </div>
+    </div>
+  );
+}
+
 /* ---------------------------------------------------------
    Main game component
 --------------------------------------------------------- */
 export default function MahjongSolitaire() {
+  const isMobile = useIsMobile();
   const [dateStr] = useState(todayStr());
   const [game] = useState(() => buildGame(dateStr));
   const [hand, setHand] = useState(game.hand);
@@ -425,7 +560,15 @@ export default function MahjongSolitaire() {
 
   const finalize = useCallback(
     async (hand14) => {
-      const scored = scoreHand(hand14);
+      let scored = scoreHand(hand14);
+      if (scored.valid && turnIndex === 0) {
+        scored = {
+          ...scored,
+          faan: scored.faan + 10,
+          breakdown: [...scored.breakdown, "Heavenly Hand (+10)"],
+          label: "Heavenly Hand",
+        };
+      }
       setResult(scored);
       setFinalHand(hand14);
       setGameOver(true);
@@ -449,7 +592,7 @@ export default function MahjongSolitaire() {
         /* storage unavailable, game still playable this session */
       }
     },
-    [dateStr, isPractice]
+    [dateStr, isPractice, turnIndex]
   );
 
   function handleTryAgain() {
@@ -803,10 +946,9 @@ export default function MahjongSolitaire() {
           <div
             style={{
               display: "flex",
-              flexWrap: "nowrap",
+              flexWrap: "wrap",
               justifyContent: "center",
-              gap: 8,
-              overflowX: "auto",
+              gap: isMobile ? 6 : 8,
               padding: "0 4px 6px",
             }}
           >
@@ -924,7 +1066,7 @@ export default function MahjongSolitaire() {
               border: "1px solid rgba(240,230,207,0.2)",
               borderRadius: 16,
               padding: 24,
-              maxWidth: 420,
+              maxWidth: 460,
               width: "100%",
               maxHeight: "80vh",
               overflowY: "auto",
@@ -947,20 +1089,143 @@ export default function MahjongSolitaire() {
               is valid — if it doesn't form four sets of three plus a pair (or seven pairs), you score zero.
               If you never declare, your final draw is checked the same way.
             </p>
+
+            <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "#F0E6CF", marginTop: 18, marginBottom: 10 }}>
+              Triplets &amp; sequences
+            </div>
+            <p style={{ fontSize: "0.85rem", lineHeight: 1.5, color: "#D8CBA8", marginBottom: 12 }}>
+              A set of three must either be three <em>identical</em> tiles, or three tiles in a row within the
+              same suit. The suit has to match — same number in different suits doesn't count as either one.
+            </p>
+            <ExampleRow
+              tiles={[{ suit: "d", value: 3 }, { suit: "d", value: 3 }, { suit: "d", value: 3 }]}
+              valid
+              label="Triplet — three identical tiles"
+            />
+            <ExampleRow
+              tiles={[{ suit: "d", value: 3 }, { suit: "b", value: 3 }, { suit: "m", value: 3 }]}
+              valid={false}
+              label="Not a triplet — same number, different suits"
+            />
+            <ExampleRow
+              tiles={[{ suit: "d", value: 3 }, { suit: "d", value: 4 }, { suit: "d", value: 5 }]}
+              valid
+              label="Sequence — three in a row, same suit"
+            />
+            <ExampleRow
+              tiles={[{ suit: "d", value: 3 }, { suit: "b", value: 4 }, { suit: "m", value: 5 }]}
+              valid={false}
+              label="Not a sequence — must all be the same suit"
+            />
+            <p style={{ fontSize: "0.85rem", lineHeight: 1.5, color: "#D8CBA8", marginTop: 4, marginBottom: 16 }}>
+              Winds and dragons can only form triplets (or the pair) — they never form sequences.
+            </p>
+
             <p style={{ fontSize: "0.9rem", lineHeight: 1.5, color: "#D8CBA8" }}>
-              A valid hand is scored in faan:
+              A valid hand is scored in faan (multiple patterns can stack if a hand qualifies for more than one):
             </p>
             <ul style={{ fontSize: "0.85rem", lineHeight: 1.7, color: "#D8CBA8", paddingLeft: 18 }}>
-              <li>All Pungs (every set a triplet) — 3</li>
+              <li>All Triplets (every set a triplet) — 3</li>
               <li>All Chows (every set a run) — 1</li>
-              <li>Half Flush (one suit + honors) — 3</li>
+              <li>Mixed One Suit (one suit + honors) — 3</li>
+              <li>Small Three Dragons (two dragon triplets + pair of the third) — 3</li>
               <li>Full Flush (one suit only) — 6</li>
-              <li>All Honors (winds/dragons only) — 8</li>
+              <li>Big Three Dragons (all three dragon triplets) — 6</li>
+              <li>Small Four Winds (three wind triplets + pair of the fourth) — 5</li>
+              <li>Big Four Winds (all four wind triplets) — 8</li>
+              <li>All Honors (winds/dragons only) — 10</li>
+              <li>All Terminals (only 1s and 9s) — 10</li>
+              <li>All Green — 10</li>
+              <li>Seven Pairs — 4</li>
+              <li>Thirteen Orphans — 10</li>
+              <li>Nine Gates — 10</li>
+              <li>Heavenly Hand (declared on your very first draw) — +10</li>
               <li>Dragon Pung (each) — 1</li>
               <li>All Simples (no 1s, 9s, or honors) — 1</li>
-              <li>Seven Pairs — 4</li>
               <li>Any other valid hand — 1</li>
             </ul>
+            <p style={{ fontSize: "0.8rem", lineHeight: 1.5, color: "#9FBBA8", marginTop: 8 }}>
+              (Flower and season tiles aren't part of this game, so there's no bonus for collecting them.)
+            </p>
+
+            <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "#F0E6CF", marginTop: 18, marginBottom: 10 }}>
+              A closer look at a few rare hands
+            </div>
+
+            <p style={{ fontSize: "0.85rem", lineHeight: 1.5, color: "#D8CBA8", marginBottom: 8 }}>
+              <strong style={{ color: "#F0E6CF" }}>All Green</strong> — every tile must be the Green Dragon or a
+              Bamboo tile printed green: 2, 3, 4, 6, or 8. Bamboo 1, 5, 7, and 9 aren't green, so they break the hand.
+            </p>
+            <ExampleRow
+              tiles={[
+                { suit: "b", value: 2 },
+                { suit: "b", value: 3 },
+                { suit: "b", value: 4 },
+                { suit: "b", value: 6 },
+                { suit: "b", value: 8 },
+                { suit: "dragon", value: "green" },
+              ]}
+              valid
+              label="Only these six tiles are allowed"
+            />
+            <ExampleRow
+              tiles={[
+                { suit: "b", value: 1 },
+                { suit: "b", value: 5 },
+                { suit: "b", value: 7 },
+                { suit: "b", value: 9 },
+              ]}
+              valid={false}
+              label="These Bamboo tiles aren't green — any of them breaks the hand"
+            />
+
+            <p style={{ fontSize: "0.85rem", lineHeight: 1.5, color: "#D8CBA8", margin: "16px 0 8px" }}>
+              <strong style={{ color: "#F0E6CF" }}>Thirteen Orphans</strong> — collect one of every terminal
+              (the 1 and 9 of each suit), one of every wind, and one of every dragon: 13 unique tiles in total.
+              Your 14th tile just duplicates any one of them to form the pair.
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: 12 }}>
+              {[
+                { suit: "m", value: 1 },
+                { suit: "m", value: 9 },
+                { suit: "b", value: 1 },
+                { suit: "b", value: 9 },
+                { suit: "d", value: 1 },
+                { suit: "d", value: 9 },
+                { suit: "wind", value: "E" },
+                { suit: "wind", value: "S" },
+                { suit: "wind", value: "W" },
+                { suit: "wind", value: "N" },
+                { suit: "dragon", value: "red" },
+                { suit: "dragon", value: "green" },
+                { suit: "dragon", value: "white" },
+              ].map((t, i) => (
+                <Tile key={i} tile={t} small />
+              ))}
+            </div>
+
+            <p style={{ fontSize: "0.85rem", lineHeight: 1.5, color: "#D8CBA8", margin: "0 0 8px" }}>
+              <strong style={{ color: "#F0E6CF" }}>Nine Gates</strong> — one suit only, shaped exactly like this:
+              three of the 1, one each of 2 through 8, three of the 9 — then any 14th tile from that same suit
+              completes it, no matter which one.
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: 12 }}>
+              {[1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 9].map((v, i) => (
+                <Tile key={i} tile={{ suit: "d", value: v }} small />
+              ))}
+            </div>
+
+            <p style={{ fontSize: "0.85rem", lineHeight: 1.5, color: "#D8CBA8", marginBottom: 8 }}>
+              <strong style={{ color: "#F0E6CF" }}>Small / Big Three Dragons</strong> and{" "}
+              <strong style={{ color: "#F0E6CF" }}>Small / Big Four Winds</strong> — build triplets of two, three,
+              or all of the dragons or winds. Getting the pair to match the one you're missing (e.g. a pair of
+              White when you have Red and Green triplets) still counts as the "small" version.
+            </p>
+            <p style={{ fontSize: "0.85rem", lineHeight: 1.5, color: "#D8CBA8", marginBottom: 4 }}>
+              <strong style={{ color: "#F0E6CF" }}>Heavenly Hand</strong> — declare Mahjong on the very first tile
+              you draw. Real mahjong distinguishes a dealer's opening hand from a non-dealer's first draw; since
+              this is solitaire, both are treated the same way here.
+            </p>
           </div>
         </div>
       )}
