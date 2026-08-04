@@ -158,14 +158,16 @@ function parseKey(k) {
   if (isHonorKey(k)) return { type: "honor" };
   return { type: "number", suit: k[0], value: parseInt(k.slice(1), 10) };
 }
-function decompose(counts, melds) {
+function decomposeAll(counts, melds, results) {
   const k = firstNonZero(counts);
-  if (!k) return melds;
+  if (!k) {
+    results.push([...melds]);
+    return;
+  }
   const info = parseKey(k);
   if ((counts[k] || 0) >= 3) {
     counts[k] -= 3;
-    const res = decompose(counts, [...melds, { type: "pung", key: k }]);
-    if (res) return res;
+    decomposeAll(counts, [...melds, { type: "pung", key: k }], results);
     counts[k] += 3;
   }
   if (info.type === "number" && info.value <= 7) {
@@ -175,29 +177,33 @@ function decompose(counts, melds) {
       counts[k] -= 1;
       counts[k2] -= 1;
       counts[k3] -= 1;
-      const res = decompose(counts, [
-        ...melds,
-        { type: "chow", key: k, suit: info.suit, start: info.value },
-      ]);
-      if (res) return res;
+      decomposeAll(counts, [...melds, { type: "chow", key: k, suit: info.suit, start: info.value }], results);
       counts[k] += 1;
       counts[k2] += 1;
       counts[k3] += 1;
     }
   }
-  return null;
 }
-function findStandardHand(tiles) {
+// A 14-tile hand can sometimes be grouped into melds more than one valid way
+// (e.g. three of each of three consecutive numbers can read as three triplets
+// OR as three parallel sequences). Real scoring credits whichever reading is
+// worth more, so this returns every valid {pair, melds} combination rather
+// than stopping at the first one found.
+function findAllStandardHands(tiles) {
   const base = buildCounts(tiles);
+  const found = [];
   for (const pairKey of Object.keys(base)) {
     if (base[pairKey] >= 2) {
       const counts = { ...base };
       counts[pairKey] -= 2;
-      const melds = decompose(counts, []);
-      if (melds && melds.length === 4) return { pair: pairKey, melds };
+      const results = [];
+      decomposeAll(counts, [], results);
+      results.forEach((melds) => {
+        if (melds.length === 4) found.push({ pair: pairKey, melds });
+      });
     }
   }
-  return null;
+  return found;
 }
 function findSevenPairs(tiles) {
   const counts = buildCounts(tiles);
@@ -259,41 +265,95 @@ function pungIsSimple(k) {
   return v >= 2 && v <= 8;
 }
 
+function suitProfile(tiles) {
+  const suitsUsed = new Set();
+  let honorInvolved = false;
+  tiles.forEach((t) => {
+    if (t.suit === "wind" || t.suit === "dragon") honorInvolved = true;
+    else suitsUsed.add(t.suit);
+  });
+  return { suitsUsed, honorInvolved };
+}
+
+function isSimpleTile(t) {
+  if (t.suit === "wind" || t.suit === "dragon") return false;
+  return t.value >= 2 && t.value <= 8;
+}
+
+const LABEL_PRIORITY = [
+  "Big Four Winds", "Big Three Dragons", "All Terminals", "All Green",
+  "Small Four Winds", "Small Three Dragons", "Full Flush", "All Honors",
+  "All Triplets", "Mixed One Suit",
+];
+function pickLabel(breakdown) {
+  for (const p of LABEL_PRIORITY) {
+    if (breakdown.some((b) => b.startsWith(p))) return p;
+  }
+  return breakdown[0].split(" (")[0];
+}
+
 function scoreHand(tiles) {
   if (findThirteenOrphans(tiles)) {
     return { valid: true, faan: 10, breakdown: ["Thirteen Orphans (+10)"], label: "Thirteen Orphans" };
   }
   if (findNineGates(tiles)) {
-    return { valid: true, faan: 10, breakdown: ["Nine Gates (+10)"], label: "Nine Gates" };
+    return {
+      valid: true,
+      faan: 16,
+      breakdown: ["Nine Gates (+10)", "Full Flush (+6)"],
+      label: "Nine Gates",
+    };
   }
   const seven = findSevenPairs(tiles);
   if (seven) {
     const breakdown = ["Seven Pairs (+4)"];
     let faan = 4;
+    const { suitsUsed, honorInvolved } = suitProfile(tiles);
+
+    if (suitsUsed.size === 1 && !honorInvolved) {
+      faan += 6;
+      breakdown.push("Full Flush (+6)");
+    } else if (suitsUsed.size === 1 && honorInvolved) {
+      faan += 3;
+      breakdown.push("Mixed One Suit (+3)");
+    } else if (suitsUsed.size === 0 && honorInvolved) {
+      faan += 10;
+      breakdown.push("All Honors (+10)");
+    }
+
+    if (isAllTerminalsHand(tiles)) {
+      faan += 10;
+      breakdown.push("All Terminals (+10)");
+    }
     if (isAllGreenHand(tiles)) {
       faan += 10;
       breakdown.push("All Green (+10)");
     }
-    return { valid: true, faan, breakdown, label: isAllGreenHand(tiles) ? "All Green" : "Seven Pairs" };
-  }
-  const std = findStandardHand(tiles);
-  if (!std) return { valid: false, faan: 0, breakdown: [], label: "No Valid Hand" };
+    if (tiles.every(isSimpleTile)) {
+      faan += 1;
+      breakdown.push("All Simples (+1)");
+    }
 
-  const { pair, melds } = std;
+    return { valid: true, faan, breakdown, label: pickLabel(breakdown) };
+  }
+  const candidates = findAllStandardHands(tiles);
+  if (candidates.length === 0) return { valid: false, faan: 0, breakdown: [], label: "No Valid Hand" };
+
+  let best = null;
+  for (const { pair, melds } of candidates) {
+    const scored = scoreMeldDecomposition(tiles, pair, melds);
+    if (!best || scored.faan > best.faan) best = scored;
+  }
+  return { valid: true, faan: best.faan, breakdown: best.breakdown, label: pickLabel(best.breakdown) };
+}
+
+function scoreMeldDecomposition(tiles, pair, melds) {
   const breakdown = [];
   let faan = 0;
 
   const allPung = melds.every((m) => m.type === "pung");
   const allChow = melds.every((m) => m.type === "chow");
-  const honorInvolved =
-    isHonorKey(pair) || melds.some((m) => m.type === "pung" && isHonorKey(m.key));
-
-  const suitsUsed = new Set();
-  melds.forEach((m) => {
-    if (m.type === "chow") suitsUsed.add(m.suit);
-    if (m.type === "pung" && !isHonorKey(m.key)) suitsUsed.add(m.key[0]);
-  });
-  if (!isHonorKey(pair)) suitsUsed.add(pair[0]);
+  const { suitsUsed, honorInvolved } = suitProfile(tiles);
 
   if (allPung) {
     faan += 3;
@@ -366,19 +426,7 @@ function scoreHand(tiles) {
     breakdown.push("Basic Winning Hand (+1)");
   }
 
-  const priority = [
-    "Big Four Winds", "Big Three Dragons", "All Terminals", "All Green",
-    "Small Four Winds", "Small Three Dragons", "Full Flush", "All Honors",
-    "All Triplets", "Mixed One Suit",
-  ];
-  let label = breakdown[0].split(" (")[0];
-  for (const p of priority) {
-    if (breakdown.some((b) => b.startsWith(p))) {
-      label = p;
-      break;
-    }
-  }
-  return { valid: true, faan, breakdown, label };
+  return { faan, breakdown };
 }
 
 /* ---------------------------------------------------------
@@ -1296,23 +1344,25 @@ export default function MahjongSolitaire() {
               A valid hand is scored in faan (multiple patterns can stack if a hand qualifies for more than one):
             </p>
             <ul style={{ fontSize: "0.85rem", lineHeight: 1.7, color: "#D8CBA8", paddingLeft: 18 }}>
-              <li>All Triplets (every set a triplet, any pair): 3 faan</li>
-              <li>All Sequences (every set a run, any pair): 1 faan</li>
-              <li>Semi Flush (a hand comprised of only one suit plus honors): 3 faan</li>
+              <li>All Triplets (every set a triplet): 3 faan</li>
+              <li>All Chows (every set a run): 1 faan</li>
+              <li>Mixed One Suit (one suit plus honors): 3 faan</li>
               <li>Small Three Dragons (two dragon triplets plus a pair of the third): 3 faan</li>
-              <li>Seven Pairs: 4 faan</li>
-              <li>Full Flush (a hand comprised of one suit only): 6 faan</li>
-              <li>Big Three Dragons (all three dragon triplets, any pair): 6 faan</li>
+              <li>Full Flush (one suit only): 6 faan</li>
+              <li>Big Three Dragons (all three dragon triplets): 6 faan</li>
               <li>Small Four Winds (three wind triplets plus a pair of the fourth): 5 faan</li>
               <li>Big Four Winds (all four wind triplets): 8 faan</li>
               <li>All Honors (winds/dragons only): 10 faan</li>
               <li>All Terminals (only 1s and 9s): 10 faan</li>
               <li>All Green: 10 faan</li>
+              <li>Seven Pairs: 4 faan</li>
               <li>Thirteen Orphans: 10 faan</li>
-              <li>Nine Gates: 10 faan</li>
+              <li>Nine Gates: 16 faan (includes Full Flush, since it's always one suit)</li>
               <li>Heavenly Hand (declared on your very first draw): +10 faan</li>
               <li>Dragon Pung (each): 1 faan</li>
-              </ul>
+              <li>All Simples (no 1s, 9s, or honors): 1 faan</li>
+              <li>Any other valid hand: 1 faan</li>
+            </ul>
             <p style={{ fontSize: "0.8rem", lineHeight: 1.5, color: "#9FBBA8", marginTop: 8 }}>
               (Flower and season tiles aren't part of this game, so there's no bonus for collecting them.)
             </p>
