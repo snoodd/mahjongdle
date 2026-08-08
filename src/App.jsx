@@ -1298,6 +1298,9 @@ export default function MahjongSolitaire() {
               </button>
             </div>
             <p style={{ fontSize: "0.9rem", lineHeight: 1.5, color: "#D8CBA8" }}>
+              The object of the game is to form a hand of fourteen tiles, compromised of four sets and a pair.
+               A Set can be either a Triplet (Three of a kind of the same suit) or a Sequence (Three tiles of the same suit
+               in sequential order). 
               You start with 13 tiles. Draw {DRAWS} tiles, one at a time, from today's shared wall. Everyone
               gets the same tiles in the same order. After each draw (except the last), discard one tile to
               stay at 13. Your final draw locks in automatically as your 14th tile, with no more discards.
